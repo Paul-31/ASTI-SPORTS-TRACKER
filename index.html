@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASTI SPORTS TRACKER</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg:#101116; --panel:#1c1e27; --text:#fff;
+  --muted:#a5a7b2; --red:#ed3348; --line:#30323c;
+}
+body.light {
+  --bg:#f1f2f6; --panel:#fff; --text:#171820;
+  --muted:#666977; --line:#dddfe7;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+font-family:Arial,sans-serif}
+button,input,select{font:inherit}
+button{cursor:pointer;border:0;border-radius:9px;padding:12px 16px;
+background:var(--red);color:white;font-weight:bold}
+button.secondary{background:#393c49}
+input,select{width:100%;padding:13px;margin:7px 0 13px;
+border-radius:9px;border:1px solid var(--line);
+background:var(--bg);color:var(--text)}
+h1,h2,h3{margin-top:0}
+small,.muted{color:var(--muted)}
+header{background:#191a21;padding:16px 5%;
+display:flex;justify-content:space-between;align-items:center;
+border-bottom:2px solid var(--red)}
+.brand{font-size:19px;font-weight:900;letter-spacing:1px}
+.brand span{color:var(--red)}
+.container{max-width:1100px;margin:auto;padding:20px}
+.panel,.stat{background:var(--panel);border:1px solid var(--line);
+border-radius:14px;padding:18px;margin-bottom:16px}
+.auth{max-width:420px;margin:7vh auto;padding:25px}
+.auth h1{text-align:center}
+.auth .brand{text-align:center;margin-bottom:25px}
+.tabs{display:flex;gap:8px;margin-bottom:15px}
+.tabs button{flex:1}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.stat strong{display:block;font-size:25px;color:var(--red);margin-top:8px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.actions button{flex:1;min-width:100px}
+#map{height:260px;border-radius:12px;z-index:1}
+#tracker{display:none}
+#app{display:none}
+.nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.nav button{background:var(--panel);border:1px solid var(--line)}
+.nav button.active{background:var(--red)}
+.timer{font-size:42px;font-weight:bold;text-align:center;
+padding:15px;color:var(--red)}
+.progress{height:12px;background:var(--line);border-radius:20px;overflow:hidden}
+.progress div{height:100%;background:var(--red);width:0%}
+table{width:100%;border-collapse:collapse}
+td,th{padding:10px;border-bottom:1px solid var(--line);text-align:left}
+.hidden{display:none!important}
+@media(max-width:700px){
+ .stats{grid-template-columns:1fr 1fr}
+ .grid{grid-template-columns:1fr}
+ header{padding:14px}
+ .container{padding:13px}
+}
+</style>
+</head>
+<body>
+
+<header>
+ <div class="brand">ASTI <span>SPORTS TRACKER</span></div>
+ <button class="secondary" onclick="toggleTheme()">🌙 / ☀️</button>
+</header>
+
+<!-- ACCOUNT PAGE -->
+<section id="authPage" class="auth panel">
+ <div class="brand">ASTI <span>SPORTS TRACKER</span></div>
+ <h2 id="authTitle">Welcome Back!</h2>
+ <div class="tabs">
+  <button onclick="showAuth('login')">Login</button>
+  <button class="secondary" onclick="showAuth('register')">Create Account</button>
+ </div>
+
+ <div id="loginForm">
+  <label>Email</label>
+  <input id="loginEmail" type="email" placeholder="Your email">
+  <label>Password</label>
+  <input id="loginPassword" type="password" placeholder="Your password">
+  <button style="width:100%" onclick="login()">SIGN IN</button>
+ </div>
+
+ <div id="registerForm" class="hidden">
+  <label>Full Name</label>
+  <input id="regName" placeholder="Full name">
+  <label>Username</label>
+  <input id="regUsername" placeholder="Username">
+  <label>Email</label>
+  <input id="regEmail" type="email" placeholder="Email address">
+  <label>Password</label>
+  <input id="regPassword" type="password" placeholder="At least 8 characters"
+   oninput="checkStrength()">
+  <small id="strength">Password strength: —</small>
+  <label>Confirm Password</label>
+  <input id="regConfirm" type="password" placeholder="Repeat password">
+  <label><input id="terms" type="checkbox" style="width:auto">
+   I agree to use this demo application.</label>
+  <button style="width:100%" onclick="register()">CREATE ACCOUNT</button>
+ </div>
+ <p id="authMessage" class="muted"></p>
+ <small>Demo accounts are stored locally in this browser. This is not production-grade authentication.</small>
+</section>
+
+<!-- MAIN APPLICATION -->
+<div id="app">
+ <div class="container">
+  <div class="panel">
+   <h2>Welcome, <span id="userName">Athlete</span>! 🏆</h2>
+   <small id="userEmail"></small>
+   <div class="actions" style="margin-top:12px">
+    <button class="secondary" onclick="logout()">Logout</button>
+   </div>
+  </div>
+
+  <div class="nav">
+   <button class="active" onclick="page('dashboard',this)">Dashboard</button>
+   <button onclick="page('workout',this)">Workout</button>
+   <button onclick="page('history',this)">History</button>
+   <button onclick="page('reports',this)">Reports</button>
+   <button onclick="page('profile',this)">Profile</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <section id="dashboard">
+   <h2>My Dashboard</h2>
+   <div class="stats">
+    <div class="stat">Workouts<strong id="totalWorkouts">0</strong></div>
+    <div class="stat">Distance<strong id="totalDistance">0 km</strong></div>
+    <div class="stat">Calories<strong id="totalCalories">0</strong></div>
+    <div class="stat">Time<strong id="totalTime">0 min</strong></div>
+   </div>
+   <div class="panel">
+    <h3>Weekly Activity</h3>
+    <canvas id="weeklyChart"></canvas>
+   </div>
+   <div class="panel">
+    <h3>Distance Goal</h3>
+    <input id="goalInput" type="number" min="1" placeholder="Weekly goal in km">
+    <button onclick="saveGoal()">Save Goal</button>
+    <p id="goalText">0 / 20 km</p>
+    <div class="progress"><div id="goalBar"></div></div>
+   </div>
+  </section>
+
+  <!-- WORKOUT -->
+  <section id="workout" class="hidden">
+   <h2>Workout Tracker</h2>
+   <div class="panel">
+    <label>Select Sport</label>
+    <select id="sport">
+     <option>Running</option><option>Walking</option>
+     <option>Cycling</option><option>Hiking</option>
+     <option>Basketball</option><option>Football</option>
+     <option>Badminton</option><option>Volleyball</option>
+     <option>Swimming</option><option>Gym</option>
+     <option>Yoga</option><option>Other</option>
+    </select>
+    <label>Weight (kg) – for calorie estimate</label>
+    <input id="weight" type="number" value="60" min="1">
+    <label>Manual Distance (km) – for indoor activities</label>
+    <input id="manualDistance" type="number" value="0" min="0" step="0.01">
+    <div class="timer" id="timer">00:00:00</div>
+    <div class="stats">
+     <div class="stat">Distance<strong id="distance">0 km</strong></div>
+     <div class="stat">Speed<strong id="speed">0 km/h</strong></div>
+     <div class="stat">Pace<strong id="pace">—</strong></div>
+     <div class="stat">Calories<strong id="calories">0</strong></div>
+    </div>
+    <div class="actions">
+     <button onclick="startWorkout()">START</button>
+     <button class="secondary" onclick="pauseWorkout()">PAUSE</button>
+     <button class="secondary" onclick="resumeWorkout()">RESUME</button>
+     <button onclick="finishWorkout()">FINISH</button>
+    </div>
+    <p id="gpsStatus" class="muted">GPS is waiting.</p>
+   </div>
+   <div class="panel">
+    <h3>GPS Route</h3>
+    <div id="map"></div>
+    <p class="muted">GPS tracking requires location permission and an HTTPS connection.</p>
+   </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="history" class="hidden">
+   <h2>Workout History</h2>
+   <input id="historySearch" placeholder="Search sport..." oninput="renderHistory()">
+   <div class="panel" style="overflow-x:auto">
+    <table>
+     <thead><tr><th>Sport</th><th>Distance</th><th>Time</th><th>Calories</th><th>Action</th></tr></thead>
+     <tbody id="historyRows"></tbody>
+    </table>
+   </div>
+   <div class="actions">
+    <button onclick="exportCSV()">Export CSV</button>
+    <button class="secondary" onclick="backup()">Backup JSON</button>
+    <button class="secondary" onclick="document.getElementById('restoreFile').click()">Restore JSON</button>
+    <input id="restoreFile" type="file" accept=".json" class="hidden" onchange="restoreBackup(event)">
+   </div>
+  </section>
+
+  <!-- REPORTS -->
+  <section id="reports" class="hidden">
+   <h2>My Progress</h2>
+   <div class="panel">
+    <h3>Personal Records</h3>
+    <p>Longest distance: <strong id="recordDistance">0 km</strong></p>
+    <p>Longest workout: <strong id="recordTime">0 min</strong></p>
+    <p>Total sessions: <strong id="recordSessions">0</strong></p>
+   </div>
+   <div class="panel">
+    <h3>All-Time Distance</h3>
+    <canvas id="sportChart"></canvas>
+   </div>
+  </section>
+
+  <!-- PROFILE -->
+  <section id="profile" class="hidden">
+   <h2>My Profile</h2>
+   <div class="panel">
+    <label>Full Name</label>
+    <input id="profileName">
+    <label>Username</label>
+    <input id="profileUsername">
+    <label>Weight (kg)</label>
+    <input id="profileWeight" type="number" min="1">
+    <button onclick="saveProfile()">Save Profile</button>
+   </div>
+  </section>
+ </div>
+</div>
+
+<script>
+const KEY="asti_accounts_v3";
+let current=null, timerInterval=null, seconds=0, running=false;
+let workoutStart=0, pausedAt=0, watchId=null;
+let route=[], map=null, routeLine=null, marker=null;
+let chart1=null, chart2=null;
+
+function accounts(){return JSON.parse(localStorage.getItem(KEY)||"{}")}
+function saveAccounts(a){localStorage.setItem(KEY,JSON.stringify(a))}
+function showAuth(type){
+ document.getElementById("loginForm").classList.toggle("hidden",type!=="login");
+ document.getElementById("registerForm").classList.toggle("hidden",type!=="register");
+ document.getElementById("authTitle").textContent=type==="login"?"Welcome Back!":"Create Your Account";
+ document.getElementById("authMessage").textContent="";
+}
+function message(t){document.getElementById("authMessage").textContent=t}
+function checkStrength(){
+ let p=document.getElementById("regPassword").value;
+ let score=(p.length>=8)+(/[A-Z]/.test(p))+(/[0-9]/.test(p))+( /[^A-Za-z0-9]/.test(p));
+ document.getElementById("strength").textContent="Password strength: "+["Weak","Fair","Good","Strong","Very strong"][score];
+}
+async function hashPassword(password,salt){
+ const enc=new TextEncoder();
+ const key=await crypto.subtle.importKey("raw",enc.encode(password),"PBKDF2",false,["deriveBits"]);
+ const bits=await crypto.subtle.deriveBits({name:"PBKDF2",salt:enc.encode(salt),iterations:310000,hash:"SHA-256"},key,256);
+ return Array.from(new Uint8Array(bits)).map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+async function register(){
+ try{
+  const name=regName.value.trim(),username=regUsername.value.trim();
+  const email=regEmail.value.trim().toLowerCase(),pass=regPassword.value;
+  if(!name||!username||!email||!pass)return message("Please complete all fields.");
+  if(!/^[a-zA-Z0-9_]{3,20}$/.test(username))return message("Username must be 3–20 letters, numbers or underscores.");
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return message("Enter a valid email.");
+  if(pass.length<8||!/[A-Z]/.test(pass)||!/[0-9]/.test(pass))return message("Use 8+ characters, one uppercase letter and one number.");
+  if(pass!==regConfirm.value)return message("Passwords do not match.");
+  if(!terms.checked)return message("Please accept the demo terms.");
+  if(!crypto.subtle)return message("Secure password hashing is unavailable. Open this app using HTTPS or localhost.");
+  let a=accounts();
+  if(a[email])return message("Email already registered.");
+  if(Object.values(a).some(x=>x.username.toLowerCase()===username.toLowerCase()))return message("Username already exists.");
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const saltHex=Array.from(salt).map(x=>x.toString(16).padStart(2,"0")).join("");
+  const hash=await hashPassword(pass,saltHex);
+  a[email]={name,username,email,salt:saltHex,hash,weight:60,goal:20,workouts:[]};
+  saveAccounts(a);message("Account created! You can now log in.");showAuth("login");
+ }catch(e){message("Could not create account. Please try again.")}
+}
+async function login(){
+ try{
+  let email=loginEmail.value.trim().toLowerCase(),pass=loginPassword.value;
+  let a=accounts(),u=a[email];
+  if(!u)return message("Account not found.");
+  const hash=await hashPassword(pass,u.salt);
+  if(hash!==u.hash)return message("Incorrect password.");
+  current=email;sessionStorage.setItem("astiSession",email);openApp();
+ }catch(e){message("Login failed. Please try again.")}
+}
+function logout(){
+ stopGPS();clearInterval(timerInterval);current=null;
+ sessionStorage.removeItem("astiSession");
+ app.style.display="none";authPage.style.display="block";
+}
+function user(){return accounts()[current]}
+function updateUser(fn){
+ let a=accounts();fn(a[current]);saveAccounts(a)
+}
+function openApp(){
+ let u=user();if(!u)return logout();
+ authPage.style.display="none";app.style.display="block";
+ userName.textContent=u.name;userEmail.textContent=u.email;
+ profileName.value=u.name;profileUsername.value=u.username;
+ profileWeight.value=u.weight;goalInput.value=u.goal;
+ renderAll();
+}
+function page(id,btn){
+ ["dashboard","workout","history","reports","profile"].forEach(x=>document.getElementById(x).classList.toggle("hidden",x!==id));
+ document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("active"));
+ btn.classList.add("active");
+ if(id==="workout")setTimeout(initMap,100);
+ if(id==="reports")renderCharts();
+}
+function toggleTheme(){document.body.classList.toggle("light")}
+function formatTime(s){
+ let h=Math.floor(s/3600),m=Math.floor(s%3600/60),sec=s%60;
+ return [h,m,sec].map(x=>String(x).padStart(2,"0")).join(":");
+}
+function initMap(){
+ if(map)return;
+ map=L.map("map").setView([12.0,121.0],6);
+ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap"}).addTo(map);
+ routeLine=L.polyline([],{color:"#ed3348",weight:5}).addTo(map);
+}
+function startWorkout(){
+ if(running)return;
+ if(seconds===0){
+  seconds=0;route=[];manualDistance.value=manualDistance.value||0;
+  workoutStart=Date.now();
+  initMap();
+  routeLine.setLatLngs([]);
+ }
+ running=true;pausedAt=Date.now();
+ clearInterval(timerInterval);
+ timerInterval=setInterval(()=>{
+  seconds++;
+  timer.textContent=formatTime(seconds);
+  updateMetrics();
+ },1000);
+ if(["Running","Walking","Cycling","Hiking"].includes(sport.value))startGPS();
+ gpsStatus.textContent="Workout in progress.";
+}
+function pauseWorkout(){
+ if(!running)return;
+ running=false;clearInterval(timerInterval);stopGPS();
+ gpsStatus.textContent="Workout paused.";
+}
+function resumeWorkout(){
+ if(running||seconds===0)return startWorkout();
+ startWorkout();
+}
+function startGPS(){
+ if(!navigator.geolocation){gpsStatus.textContent="GPS is not supported.";return}
+ if(watchId!==null)return;
+ watchId=navigator.geolocation.watchPosition(pos=>{
+  const lat=pos.coords.latitude,lon=pos.coords.longitude;
+  const point=[lat,lon];
+  if(route.length){
+   const last=route[route.length-1];
+   const d=distanceBetween(last[0],last[1],lat,lon);
+   if(d<0.005||d>0.5)return;
+  }
+  route.push(point);
+  initMap();routeLine.addLatLng(point);map.setView(point,16);
+  if(!marker)marker=L.marker(point).addTo(map);
+  else marker.setLatLng(point);
+  gpsStatus.textContent="GPS accuracy: "+Math.round(pos.coords.accuracy)+" m";
+  updateMetrics();
+ },err=>{gpsStatus.textContent="GPS error: "+err.message;},{enableHighAccuracy:true,maximumAge:1000});
+}
+function stopGPS(){
+ if(watchId!==null){navigator.geolocation.clearWatch(watchId);watchId=null}
+}
+function distanceBetween(a,b,c,d){
+ const R=6371,rad=x=>x*Math.PI/180;
+ let x=rad(c-a),y=rad(d-b);
+ let q=Math.sin(x/2)**2+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(y/2)**2;
+ return 2*R*Math.asin(Math.sqrt(q));
+}
+function gpsDistance(){
+ let d=0;for(let i=1;i<route.length;i++)
+ d+=distanceBetween(...route[i-1],...route[i]);return d;
+}
+function getDistance(){
+ return route.length>1?gpsDistance():Math.max(0,Number(manualDistance.value)||0);
+}
+function updateMetrics(){
+ const d=getDistance(),hours=seconds/3600;
+ distance.textContent=d.toFixed(2)+" km";
+ speed.textContent=hours?(d/hours).toFixed(1)+" km/h":"0 km/h";
+ pace.textContent=d>0?(seconds/60/d).toFixed(1)+" min/km":"—";
+ const weight=Number(document.getElementById("weight").value)||60;
+ const factor={Running:9,Walking:3.5,Cycling:7,Hiking:6,Basketball:8,Football:8,Badminton:5,Volleyball:4,Swimming:7,Gym:5,Yoga:3,Other:4}[sport.value]||4;
+ calories.textContent=Math.round(factor*weight*seconds/3600);
+}
+function finishWorkout(){
+ if(seconds===0)return alert("Start a workout first.");
+ pauseWorkout();
+ const d=getDistance(),cal=Number(calories.textContent)||0;
+ const record={sport:sport.value,distance:Number(d.toFixed(3)),seconds,calories:cal,date:new Date().toISOString(),route};
+ updateUser(u=>u.workouts.push(record));
+ seconds=0;timer.textContent="00:00:00";manualDistance.value=0;
+ route=[];renderAll();alert("Workout saved successfully!");
+}
+function renderAll(){
+ let u=user(),w=u.workouts||[];
+ totalWorkouts.textContent=w.length;
+ totalDistance.textContent=w.reduce((s,x)=>s+x.distance,0).toFixed(2)+" km";
+ totalCalories.textContent=w.reduce((s,x)=>s+x.calories,0);
+ totalTime.textContent=Math.round(w.reduce((s,x)=>s+x.seconds,0)/60)+" min";
+ goalInput.value=u.goal||20;
+ let week=w.filter(x=>Date.now()-new Date(x.date).getTime()<7*86400000);
+ let wd=week.reduce((s,x)=>s+x.distance,0);
+ goalText.textContent=wd.toFixed(2)+" / "+u.goal+" km";
+ goalBar.style.width=Math.min(100,wd/(u.goal||20)*100)+"%";
+ recordDistance.textContent=Math.max(0,...w.map(x=>x.distance)).toFixed(2)+" km";
+ recordTime.textContent=Math.round(Math.max(0,...w.map(x=>x.seconds))/60)+" min";
+ recordSessions.textContent=w.length;
+ renderHistory();renderCharts();
+}
+function saveGoal(){
+ let v=Number(goalInput.value);
+ if(v<=0)return alert("Enter a valid goal.");
+ updateUser(u=>u.goal=v);renderAll();
+}
+function renderHistory(){
+ let q=historySearch.value.toLowerCase();
+ let w=user().workouts||[];
+ historyRows.innerHTML="";
+ w.slice().reverse().forEach((x,i)=>{
+  if(!x.sport.toLowerCase().includes(q))return;
+  let original=w.length-1-i;
+  let tr=document.createElement("tr");
+  [x.sport,x.distance.toFixed(2)+" km",Math.round(x.seconds/60)+" min",x.calories].forEach(v=>{
+   let td=document.createElement("td");td.textContent=v;tr.appendChild(td);
+  });
+  let td=document.createElement("td"),b=document.createElement("button");
+  b.textContent="Delete";b.className="secondary";
+  b.onclick=()=>{if(confirm("Delete this workout?")){updateUser(u=>u.workouts.splice(original,1));renderAll()}};
+  td.appendChild(b);tr.appendChild(td);historyRows.appendChild(tr);
+ });
+}
+function renderCharts(){
+ let w=user().workouts||[];
+ let labels=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+ let values=labels.map((_,day)=>w.filter(x=>new Date(x.date).getDay()===day&&Date.now()-new Date(x.date).getTime()<7*86400000).reduce((s,x)=>s+x.distance,0));
+ if(chart1)chart1.destroy();
+ chart1=new Chart(document.getElementById("weeklyChart"),{
+  type:"bar",data:{labels,datasets:[{label:"Distance (km)",data:values,backgroundColor:"#ed3348"}]},
+  options:{responsive:true,plugins:{legend:{labels:{color:getComputedStyle(document.body).getPropertyValue("--text")}}}}
+ });
+ let sports=[...new Set(w.map(x=>x.sport))];
+ if(chart2)chart2.destroy();
+ chart2=new Chart(document.getElementById("sportChart"),{
+  type:"doughnut",data:{labels:sports,datasets:[{data:sports.map(s=>w.filter(x=>x.sport===s).reduce((a,x)=>a+x.distance,0))}]},
+  options:{responsive:true}
+ });
+}
+function exportCSV(){
+ let rows=[["Sport","Distance km","Seconds","Calories","Date"],...(user().workouts||[]).map(x=>[x.sport,x.distance,x.seconds,x.calories,x.date])];
+ let csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n");
+ download(csv,"asti-workouts.csv","text/csv");
+}
+function backup(){download(JSON.stringify(user(),null,2),"asti-backup.json","application/json")}
+function download(content,name,type){
+ let a=document.createElement("a"),url=URL.createObjectURL(new Blob([content],{type}));
+ a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);
+}
+function restoreBackup(e){
+ let file=e.target.files[0];if(!file)return;
+ let reader=new FileReader();
+ reader.onload=()=>{
+  try{
+   let data=JSON.parse(reader.result);
+   if(!Array.isArray(data.workouts))throw Error();
+updateUser(u=>{u.workouts=data.workouts;u.goal=data.goal||u.goal});
+   renderAll();alert("Backup restored.");
+  }catch(err){alert("Invalid backup file.")}
+ };
+ reader.readAsText(file);
+}
+function saveProfile(){
+ updateUser(u=>{
+  u.name=profileName.value.trim()||u.name;
+  u.username=profileUsername.value.trim()||u.username;
+  u.weight=Number(profileWeight.value)||u.weight;
+ });
+ openApp();alert("Profile updated.");
+}
+function restoreSession(){
+ let email=sessionStorage.getItem("astiSession");
+ if(email&&accounts()[email]){current=email;openApp()}
+}
+restoreSession();
+</script>
+</body>
+</html>
